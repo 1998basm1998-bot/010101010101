@@ -1,11 +1,11 @@
 // === إعدادات Firebase ===
 export const firebaseConfig = {
-    apiKey: "AIzaSyCGVuftvCWX8psK9-GnMIFUbK8hYIpl36s",
-    authDomain: "sedkrar-1c800.firebaseapp.com",
-    projectId: "sedkrar-1c800",
-    storageBucket: "sedkrar-1c800.firebasestorage.app",
-    messagingSenderId: "984266925049",
-    appId: "1:984266925049:web:bfe5fd2a4e4cfd2c9c5328"
+    apiKey: "AIzaSyAI9rupxuvcgfWglCyKVwsme9zOU0cNEHs",
+    authDomain: "gjjjjjh.firebaseapp.com",
+    projectId: "gjjjjjh",
+    storageBucket: "gjjjjjh.firebasestorage.app",
+    messagingSenderId: "450515501802",
+    appId: "1:450515501802:web:f350b63d59665d732d4d93"
 };
 
 // ⚠️ هام جداً: ضع هنا رابط موقع الزبائن الذي قمت برفعه
