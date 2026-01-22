@@ -10,7 +10,7 @@ enableIndexedDbPersistence(db).catch((err) => { console.log(err.code); });
 let currentCustomer = null;
 let currentTransType = '';
 let allCustomers = [];
-let editingCustId = null; // لتحديد ما إذا كنا نعدل زبوناً
+let editingCustId = null;
 
 function initAnimations() {
     if(typeof gsap !== 'undefined') {
@@ -152,9 +152,8 @@ function renderNotifications(list) {
     }
 }
 
-// === إدارة الزبائن (إضافة / تعديل) ===
 window.openAddModal = function() {
-    editingCustId = null; // وضع الإضافة
+    editingCustId = null;
     document.getElementById('modalCustTitle').innerText = "زبون جديد";
     document.getElementById('newCustName').value = '';
     document.getElementById('newCustPhone').value = '';
@@ -171,44 +170,39 @@ window.saveCustomer = async function() {
     
     if(!name) return alert('الاسم مطلوب');
 
-    // === منطق كلمة المرور ===
     if (!pass) {
-        // توليد تلقائي 3 أرقام
         do {
             pass = Math.floor(100 + Math.random() * 900).toString();
         } while (allCustomers.some(c => c.password === pass && c.id !== editingCustId));
     } else {
-        // التحقق من أنها فريدة
         const exists = allCustomers.some(c => c.password === pass && c.id !== editingCustId);
         if (exists) return alert("هذا الرمز مستخدم بالفعل لزبون آخر! اختر رمزاً آخر.");
     }
 
     try {
         if (editingCustId) {
-            // === حالة التعديل ===
             const customerRef = allCustomers.find(c => c.id === editingCustId);
             await updateDoc(doc(db, "customers", customerRef.firebaseId), {
                 name, phone, currency, reminderDays, password: pass
             });
             alert("تم تعديل بيانات الزبون");
         } else {
-            // === حالة الإضافة الجديدة ===
             const id = Date.now().toString();
             await addDoc(collection(db, "customers"), {
                 id, name, phone, currency, 
                 reminderDays: reminderDays || 30,
-                password: pass, // نحفظ الرمز كما هو
+                password: pass,
                 created: new Date().toISOString()
             });
         }
         
         window.closeModal('modal-add-customer');
         loadDashboard();
-        if(editingCustId) goHome(); // إذا كان تعديل نرجع للرئيسية
+        if(editingCustId) goHome();
     } catch (e) { alert("خطأ: " + e.message); }
 }
 
-// === فتح زبون (عرض الرمز فقط) ===
+// === فتح زبون (تم التعديل لحساب الرصيد آنياً) ===
 window.openCustomer = async function(id) {
     const customer = allCustomers.find(c => c.id == id);
     if (!customer) return;
@@ -219,18 +213,26 @@ window.openCustomer = async function(id) {
     const trans = snap.docs.map(d => ({firebaseId: d.id, ...d.data()}));
     trans.sort((a,b) => new Date(b.date) - new Date(a.date));
 
+    // حساب الرصيد فورياً من العمليات التي تم جلبها
+    let realTimeBalance = 0;
+    trans.forEach(t => {
+        const amt = parseFloat(t.amount) || 0;
+        if (t.type === 'debt' || t.type === 'sale') realTimeBalance += amt;
+        if (t.type === 'payment') realTimeBalance -= amt;
+    });
+
     document.getElementById('view-customer').classList.remove('hidden');
     document.getElementById('custName').innerText = customer.name;
     document.getElementById('custPhone').innerText = customer.phone || '';
-    document.getElementById('custBalance').innerText = formatCurrency(customer.balance, customer.currency);
     
-    // عرض كلمة المرور فقط
+    // عرض الرصيد المحسوب بدلاً من القديم
+    document.getElementById('custBalance').innerText = formatCurrency(realTimeBalance, customer.currency);
+    
     document.getElementById('custPasswordDisplay').innerText = customer.password || '---';
 
     renderTransactions(trans, customer.currency);
 }
 
-// === حذف الزبون ===
 window.deleteCustomer = async function() {
     if (!currentCustomer) return;
     
@@ -240,10 +242,7 @@ window.deleteCustomer = async function() {
     if (!confirm(`هل أنت متأكد من حذف الزبون "${currentCustomer.name}" وجميع ديونه؟ لا يمكن التراجع!`)) return;
 
     try {
-        // حذف الزبون
         await deleteDoc(doc(db, "customers", currentCustomer.firebaseId));
-        
-        // حذف عملياته
         const q = query(collection(db, "transactions"), where("customerId", "==", currentCustomer.id));
         const snap = await getDocs(q);
         snap.forEach(async (d) => {
@@ -255,7 +254,6 @@ window.deleteCustomer = async function() {
     } catch(e) { alert("خطأ في الحذف: " + e.message); }
 }
 
-// === تعديل الزبون ===
 window.editCustomer = function() {
     if (!currentCustomer) return;
 
@@ -361,7 +359,7 @@ window.saveTransaction = async function() {
         timestamp: new Date().toISOString()
     });
     closeModal('modal-transaction');
-    openCustomer(currentCustomer.id); 
+    openCustomer(currentCustomer.id); // سيعيد تحميل الزبون ويحسب الرصيد الجديد
     loadDashboard();
 }
 function renderTransactions(transactions, currency) {
