@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, where, enableIndexedDbPersistence, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { firebaseConfig, hashPass, CUSTOMER_SITE_URL } from './config.js';
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, where, enableIndexedDbPersistence, setDoc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { firebaseConfig, hashPass } from './config.js';
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -10,6 +10,7 @@ enableIndexedDbPersistence(db).catch((err) => { console.log(err.code); });
 let currentCustomer = null;
 let currentTransType = '';
 let allCustomers = [];
+let editingCustId = null; // لتحديد ما إذا كنا نعدل زبوناً
 
 function initAnimations() {
     if(typeof gsap !== 'undefined') {
@@ -151,27 +152,63 @@ function renderNotifications(list) {
     }
 }
 
-window.addCustomer = async function() {
+// === إدارة الزبائن (إضافة / تعديل) ===
+window.openAddModal = function() {
+    editingCustId = null; // وضع الإضافة
+    document.getElementById('modalCustTitle').innerText = "زبون جديد";
+    document.getElementById('newCustName').value = '';
+    document.getElementById('newCustPhone').value = '';
+    document.getElementById('newCustPass').value = '';
+    window.showModal('modal-add-customer');
+}
+
+window.saveCustomer = async function() {
     const name = document.getElementById('newCustName').value;
     const phone = document.getElementById('newCustPhone').value;
     const currency = document.getElementById('newCustCurrency').value;
     const reminderDays = document.getElementById('newCustReminder').value;
-    const pass = document.getElementById('newCustPass').value;
+    let pass = document.getElementById('newCustPass').value;
     
     if(!name) return alert('الاسم مطلوب');
-    const id = Date.now().toString(); 
+
+    // === منطق كلمة المرور ===
+    if (!pass) {
+        // توليد تلقائي 3 أرقام
+        do {
+            pass = Math.floor(100 + Math.random() * 900).toString();
+        } while (allCustomers.some(c => c.password === pass && c.id !== editingCustId));
+    } else {
+        // التحقق من أنها فريدة
+        const exists = allCustomers.some(c => c.password === pass && c.id !== editingCustId);
+        if (exists) return alert("هذا الرمز مستخدم بالفعل لزبون آخر! اختر رمزاً آخر.");
+    }
+
     try {
-        await addDoc(collection(db, "customers"), {
-            id, name, phone, currency, 
-            reminderDays: reminderDays || 30,
-            passHash: pass ? hashPass(pass) : null,
-            created: new Date().toISOString()
-        });
+        if (editingCustId) {
+            // === حالة التعديل ===
+            const customerRef = allCustomers.find(c => c.id === editingCustId);
+            await updateDoc(doc(db, "customers", customerRef.firebaseId), {
+                name, phone, currency, reminderDays, password: pass
+            });
+            alert("تم تعديل بيانات الزبون");
+        } else {
+            // === حالة الإضافة الجديدة ===
+            const id = Date.now().toString();
+            await addDoc(collection(db, "customers"), {
+                id, name, phone, currency, 
+                reminderDays: reminderDays || 30,
+                password: pass, // نحفظ الرمز كما هو
+                created: new Date().toISOString()
+            });
+        }
+        
         window.closeModal('modal-add-customer');
         loadDashboard();
+        if(editingCustId) goHome(); // إذا كان تعديل نرجع للرئيسية
     } catch (e) { alert("خطأ: " + e.message); }
 }
 
+// === فتح زبون (عرض الرمز فقط) ===
 window.openCustomer = async function(id) {
     const customer = allCustomers.find(c => c.id == id);
     if (!customer) return;
@@ -184,18 +221,57 @@ window.openCustomer = async function(id) {
 
     document.getElementById('view-customer').classList.remove('hidden');
     document.getElementById('custName').innerText = customer.name;
+    document.getElementById('custPhone').innerText = customer.phone || '';
     document.getElementById('custBalance').innerText = formatCurrency(customer.balance, customer.currency);
     
-    // === هنا التعديل الجوهري: استخدام رابط التطبيق الخارجي ===
-    // إذا لم يضبط المدير الرابط، نضع رسالة تنبيه
-    const baseUrl = CUSTOMER_SITE_URL.includes("example") ? "يرجى_ضبط_الرابط_في_config" : CUSTOMER_SITE_URL;
-    // التأكد من عدم وجود / في نهاية الرابط
-    const cleanUrl = baseUrl.replace(/\/$/, ""); 
-    const url = `${cleanUrl}/index.html?id=${id}`;
-    
-    document.getElementById('custLink').value = url;
+    // عرض كلمة المرور فقط
+    document.getElementById('custPasswordDisplay').innerText = customer.password || '---';
 
     renderTransactions(trans, customer.currency);
+}
+
+// === حذف الزبون ===
+window.deleteCustomer = async function() {
+    if (!currentCustomer) return;
+    
+    const code = prompt("أدخل رمز التأكيد للحذف:");
+    if (code !== "121") return alert("رمز التأكيد خطأ");
+
+    if (!confirm(`هل أنت متأكد من حذف الزبون "${currentCustomer.name}" وجميع ديونه؟ لا يمكن التراجع!`)) return;
+
+    try {
+        // حذف الزبون
+        await deleteDoc(doc(db, "customers", currentCustomer.firebaseId));
+        
+        // حذف عملياته
+        const q = query(collection(db, "transactions"), where("customerId", "==", currentCustomer.id));
+        const snap = await getDocs(q);
+        snap.forEach(async (d) => {
+            await deleteDoc(doc(db, "transactions", d.id));
+        });
+
+        alert("تم الحذف بنجاح");
+        goHome();
+    } catch(e) { alert("خطأ في الحذف: " + e.message); }
+}
+
+// === تعديل الزبون ===
+window.editCustomer = function() {
+    if (!currentCustomer) return;
+
+    const code = prompt("أدخل رمز التأكيد للتعديل:");
+    if (code !== "121") return alert("رمز التأكيد خطأ");
+
+    editingCustId = currentCustomer.id;
+    
+    document.getElementById('modalCustTitle').innerText = "تعديل بيانات الزبون";
+    document.getElementById('newCustName').value = currentCustomer.name;
+    document.getElementById('newCustPhone').value = currentCustomer.phone;
+    document.getElementById('newCustCurrency').value = currentCustomer.currency;
+    document.getElementById('newCustReminder').value = currentCustomer.reminderDays;
+    document.getElementById('newCustPass').value = currentCustomer.password;
+    
+    window.showModal('modal-add-customer');
 }
 
 window.downloadBackup = async function() {
@@ -264,12 +340,6 @@ window.switchTab = (id, btn) => {
     document.getElementById(id).classList.remove('hidden');
     document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-}
-window.copyLink = function() {
-    const copyText = document.getElementById("custLink");
-    copyText.select();
-    document.execCommand("copy");
-    alert("تم نسخ الرابط");
 }
 window.openTransModal = function(type) {
     currentTransType = type;
