@@ -182,13 +182,15 @@ window.saveCustomer = async function() {
     try {
         if (editingCustId) {
             const customerRef = allCustomers.find(c => c.id === editingCustId);
-            await updateDoc(doc(db, "customers", customerRef.firebaseId), {
+            // === التعديل هنا: تمت إزالة await ليعمل الزر فوراً ===
+            updateDoc(doc(db, "customers", customerRef.firebaseId), {
                 name, phone, currency, reminderDays, password: pass
             });
             alert("تم تعديل بيانات الزبون");
         } else {
             const id = Date.now().toString();
-            await addDoc(collection(db, "customers"), {
+            // === التعديل هنا: تمت إزالة await ليعمل الزر فوراً ===
+            addDoc(collection(db, "customers"), {
                 id, name, phone, currency, 
                 reminderDays: reminderDays || 30,
                 password: pass,
@@ -352,12 +354,15 @@ window.saveTransaction = async function() {
     const item = document.getElementById('transItem').value;
     const date = document.getElementById('transDate').value;
     if(!amount) return alert("أدخل المبلغ");
-    await addDoc(collection(db, "transactions"), {
+    
+    // === التعديل هنا: تمت إزالة await ليعمل الزر فوراً ===
+    addDoc(collection(db, "transactions"), {
         customerId: currentCustomer.id,
         type: currentTransType,
         amount, note, item, date,
         timestamp: new Date().toISOString()
     });
+    
     closeModal('modal-transaction');
     openCustomer(currentCustomer.id); // سيعيد تحميل الزبون ويحسب الرصيد الجديد
     loadDashboard();
