@@ -21,6 +21,20 @@ function initAnimations() {
     }
 }
 
+// === إضافة مستمع لتنسيق المبلغ تلقائياً بالفواصل (نقاط) أثناء الكتابة ===
+document.addEventListener('DOMContentLoaded', () => {
+    const amountInput = document.getElementById('transAmount');
+    if(amountInput) {
+        amountInput.addEventListener('input', function(e) {
+            // إزالة أي شيء ليس رقماً
+            let rawValue = this.value.replace(/[^0-9]/g, '');
+            if (!rawValue) return;
+            // إضافة النقطة كفاصل للألوف (تنسيق ألماني يستخدم النقطة)
+            this.value = Number(rawValue).toLocaleString('de-DE');
+        });
+    }
+});
+
 window.checkAdminLogin = function() {
     const passInput = document.getElementById('adminPassInput').value;
     const storeInput = document.getElementById('storeNameInput').value;
@@ -60,9 +74,11 @@ async function loadDashboard() {
         const transactions = transSnapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
 
         let totalDebt = 0;
+        let totalPaidAll = 0; // متغير لحساب إجمالي الواصل (التسديدات)
         const now = new Date();
         const overdueList = [];
 
+        // حساب الديون لكل زبون
         allCustomers.forEach(c => {
             c.balance = 0;
             const myTrans = transactions.filter(t => t.customerId === c.id);
@@ -89,9 +105,21 @@ async function loadDashboard() {
             } else { c.isOverdue = false; }
         });
 
+        // حساب إجمالي الديون المتبقية
         totalDebt = allCustomers.reduce((sum, c) => sum + c.balance, 0);
 
+        // التعديل: حساب إجمالي كل المبالغ "الواصلة" (نوع payment) لجميع الزبائن
+        transactions.forEach(t => {
+            if (t.type === 'payment') {
+                totalPaidAll += (parseFloat(t.amount) || 0);
+            }
+        });
+
+        // عرض القيم في الواجهة
         document.getElementById('totalDebt').innerText = formatCurrency(totalDebt, 'IQD');
+        // عرض إجمالي الواصل الجديد
+        document.getElementById('totalPaidDisplay').innerText = formatCurrency(totalPaidAll, 'IQD');
+        
         document.getElementById('customerCount').innerText = allCustomers.length;
         
         renderCustomersList(allCustomers);
@@ -182,14 +210,12 @@ window.saveCustomer = async function() {
     try {
         if (editingCustId) {
             const customerRef = allCustomers.find(c => c.id === editingCustId);
-            // === التعديل هنا: تمت إزالة await ليعمل الزر فوراً ===
             updateDoc(doc(db, "customers", customerRef.firebaseId), {
                 name, phone, currency, reminderDays, password: pass
             });
             alert("تم تعديل بيانات الزبون");
         } else {
             const id = Date.now().toString();
-            // === التعديل هنا: تمت إزالة await ليعمل الزر فوراً ===
             addDoc(collection(db, "customers"), {
                 id, name, phone, currency, 
                 reminderDays: reminderDays || 30,
@@ -204,7 +230,6 @@ window.saveCustomer = async function() {
     } catch (e) { alert("خطأ: " + e.message); }
 }
 
-// === فتح زبون (تم التعديل لحساب الرصيد آنياً) ===
 window.openCustomer = async function(id) {
     const customer = allCustomers.find(c => c.id == id);
     if (!customer) return;
@@ -215,7 +240,6 @@ window.openCustomer = async function(id) {
     const trans = snap.docs.map(d => ({firebaseId: d.id, ...d.data()}));
     trans.sort((a,b) => new Date(b.date) - new Date(a.date));
 
-    // حساب الرصيد فورياً من العمليات التي تم جلبها
     let realTimeBalance = 0;
     trans.forEach(t => {
         const amt = parseFloat(t.amount) || 0;
@@ -227,7 +251,6 @@ window.openCustomer = async function(id) {
     document.getElementById('custName').innerText = customer.name;
     document.getElementById('custPhone').innerText = customer.phone || '';
     
-    // عرض الرصيد المحسوب بدلاً من القديم
     document.getElementById('custBalance').innerText = formatCurrency(realTimeBalance, customer.currency);
     
     document.getElementById('custPasswordDisplay').innerText = customer.password || '---';
@@ -331,7 +354,13 @@ window.changeAdminPassReal = function() {
     location.reload();
 }
 
-window.formatCurrency = (n, c) => c === 'USD' ? `$${Number(n).toLocaleString()}` : `${Number(n).toLocaleString()} د.ع`;
+// === التعديل: تغيير التنسيق ليستخدم النقاط (de-DE) بدلاً من الفواصل ===
+window.formatCurrency = (n, c) => {
+    // de-DE يستخدم النقطة للألوف (10.000) وهو المطلوب
+    const formatted = Number(n).toLocaleString('de-DE', {minimumFractionDigits: 0, maximumFractionDigits: 2});
+    return c === 'USD' ? `$${formatted}` : `${formatted} د.ع`;
+};
+
 window.showModal = (id) => document.getElementById(id).classList.remove('hidden');
 window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
 window.goHome = () => { document.getElementById('view-customer').classList.add('hidden'); loadDashboard(); };
@@ -349,13 +378,18 @@ window.openTransModal = function(type) {
     window.showModal('modal-transaction');
 }
 window.saveTransaction = async function() {
-    const amount = parseFloat(document.getElementById('transAmount').value);
+    // التعديل: تنظيف القيمة من النقاط قبل الحفظ في قاعدة البيانات لتخزينها كرقم صحيح
+    let rawAmount = document.getElementById('transAmount').value;
+    // حذف النقاط والفواصل لتحويله لرقم خام
+    rawAmount = rawAmount.replace(/\./g, '').replace(/,/g, '');
+    
+    const amount = parseFloat(rawAmount);
     const note = document.getElementById('transNote').value;
     const item = document.getElementById('transItem').value;
     const date = document.getElementById('transDate').value;
+    
     if(!amount) return alert("أدخل المبلغ");
     
-    // === التعديل هنا: تمت إزالة await ليعمل الزر فوراً ===
     addDoc(collection(db, "transactions"), {
         customerId: currentCustomer.id,
         type: currentTransType,
@@ -364,7 +398,7 @@ window.saveTransaction = async function() {
     });
     
     closeModal('modal-transaction');
-    openCustomer(currentCustomer.id); // سيعيد تحميل الزبون ويحسب الرصيد الجديد
+    openCustomer(currentCustomer.id);
     loadDashboard();
 }
 function renderTransactions(transactions, currency) {
@@ -375,6 +409,8 @@ function renderTransactions(transactions, currency) {
         div.className = 'trans-item flex flex-between';
         let colorClass = (t.type === 'payment') ? 'trans-pay' : 'trans-debt';
         let typeName = t.type === 'debt' ? 'دين' : (t.type === 'payment' ? 'تسديد' : 'فاتورة');
+        
+        // تطبيق التنسيق الجديد (نقاط) هنا أيضاً
         div.innerHTML = `
             <div><strong class="${colorClass}">${typeName}</strong> <small>${t.item || ''}</small><br><small>${t.date}</small></div>
             <strong class="${colorClass}">${window.formatCurrency(t.amount, currency)}</strong>
