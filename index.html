@@ -32,12 +32,19 @@
                 <div class="container">
                     <div class="card glass flex flex-between gsap-target">
                         <div>
-                            <small>إجمالي الديون</small>
+                            <small>إجمالي الديون (المتبقي)</small>
                             <h2 style="color: var(--danger)" id="totalDebt">...</h2>
                         </div>
                         <div>
                             <small>الزبائن</small>
                             <h3 id="customerCount">...</h3>
+                        </div>
+                    </div>
+
+                    <div class="card glass flex flex-between gsap-target">
+                        <div style="width: 100%;">
+                            <small>إجمالي الواصل (المسدّد)</small>
+                            <h2 style="color: var(--accent)" id="totalPaidDisplay">...</h2>
                         </div>
                     </div>
 
@@ -99,7 +106,7 @@
 
                         <h2 id="custName">...</h2>
                         <p id="custPhone">...</p>
-                        <div class="balance-display" id="custBalance">0.00</div>
+                        <div class="balance-display" id="custBalance" style="font-size: 2rem; font-weight: bold; color: var(--danger);">0.00</div>
                         
                         <div class="flex flex-between no-print center-flex">
                             <button class="btn btn-danger gsap-btn" onclick="openTransModal('debt')">➕ دين</button>
@@ -107,7 +114,7 @@
                             <button class="btn btn-primary gsap-btn" onclick="openTransModal('sale')">🛒 فاتورة</button>
                         </div>
                         
-                        <div class="mt-2 no-print link-box" style="background: rgba(255,255,0,0.1); padding: 10px; border-radius: 10px;">
+                        <div class="mt-2 no-print link-box" style="background: rgba(255,255,255,0.5); padding: 10px; border-radius: 10px;">
                             <small>🔑 رمز دخول الزبون:</small>
                             <h2 id="custPasswordDisplay" style="margin: 5px 0; letter-spacing: 5px; color: var(--primary);">---</h2>
                         </div>
@@ -171,7 +178,9 @@
         <div class="card glass modal-content gsap-target">
             <h3 id="transTitle">عملية جديدة</h3>
             <input type="text" id="transItem" placeholder="المادة (اختياري)" class="gsap-input">
-            <input type="number" id="transAmount" placeholder="المبلغ" class="gsap-input">
+            
+            <input type="text" inputmode="numeric" id="transAmount" placeholder="المبلغ (مثال: 10.000)" class="gsap-input">
+            
             <textarea id="transNote" placeholder="ملاحظات" class="gsap-input"></textarea>
             <input type="date" id="transDate" class="gsap-input">
             <div class="flex flex-between">
