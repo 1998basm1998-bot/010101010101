@@ -1,4 +1,4 @@
-const CACHE_NAME = 'debt-admin-v7'; // تم تحديث الإصدار لإجبار المتصفح على تحميل التعديلات
+const CACHE_NAME = 'debt-admin-v8-glass'; // تم تحديث الإصدار
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
@@ -8,7 +8,6 @@ const ASSETS_TO_CACHE = [
     './pwa.js',
     './manifest.json',
     'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js',
-    // تمت إضافة روابط فايربيس ليتم تخزينها والعمل بدون نت
     'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js',
     'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
 ];
@@ -26,8 +25,6 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-    // التعديل هنا: السماح لملفات JS الخاصة بفايربيس بالمرور من الكاش
-    // ومنع فقط روابط البيانات (googleapis) من التخزين المؤقت
     if ((e.request.url.includes('firestore') && !e.request.url.endsWith('.js')) || e.request.url.includes('googleapis')) return;
     
     e.respondWith(caches.match(e.request).then((response) => response || fetch(e.request)));
