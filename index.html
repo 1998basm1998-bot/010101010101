@@ -83,6 +83,9 @@
                         <button class="btn btn-warning full-width gsap-btn" onclick="document.getElementById('backupFile').click()">📤 استعادة نسخة محفوظة</button>
                         <input type="file" id="backupFile" class="hidden" onchange="restoreBackup(this)">
                         <hr>
+                        <h4>🗑️ منطقة الخطر</h4>
+                        <button class="btn btn-danger full-width mb-2 gsap-btn" onclick="deleteAllPayments()">⚠️ حذف جميع المبالغ المسددة (الواصل)</button>
+                        <hr>
                         <h4>🔐 تغيير كلمة المرور</h4>
                         <input type="password" id="oldPass" placeholder="الحالية" class="gsap-input">
                         <input type="password" id="newPass" placeholder="الجديدة" class="gsap-input">
@@ -178,9 +181,7 @@
         <div class="card glass modal-content gsap-target">
             <h3 id="transTitle">عملية جديدة</h3>
             <input type="text" id="transItem" placeholder="المادة (اختياري)" class="gsap-input">
-            
             <input type="text" inputmode="numeric" id="transAmount" placeholder="المبلغ (مثال: 10.000)" class="gsap-input">
-            
             <textarea id="transNote" placeholder="ملاحظات" class="gsap-input"></textarea>
             <input type="date" id="transDate" class="gsap-input">
             <div class="flex flex-between">
