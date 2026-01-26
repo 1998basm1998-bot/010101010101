@@ -21,15 +21,12 @@ function initAnimations() {
     }
 }
 
-// === إضافة مستمع لتنسيق المبلغ تلقائياً بالفواصل (نقاط) أثناء الكتابة ===
 document.addEventListener('DOMContentLoaded', () => {
     const amountInput = document.getElementById('transAmount');
     if(amountInput) {
         amountInput.addEventListener('input', function(e) {
-            // إزالة أي شيء ليس رقماً
             let rawValue = this.value.replace(/[^0-9]/g, '');
             if (!rawValue) return;
-            // إضافة النقطة كفاصل للألوف (تنسيق ألماني يستخدم النقطة)
             this.value = Number(rawValue).toLocaleString('de-DE');
         });
     }
@@ -74,11 +71,10 @@ async function loadDashboard() {
         const transactions = transSnapshot.docs.map(doc => ({ firebaseId: doc.id, ...doc.data() }));
 
         let totalDebt = 0;
-        let totalPaidAll = 0; // متغير لحساب إجمالي الواصل (التسديدات)
+        let totalPaidAll = 0;
         const now = new Date();
         const overdueList = [];
 
-        // حساب الديون لكل زبون
         allCustomers.forEach(c => {
             c.balance = 0;
             const myTrans = transactions.filter(t => t.customerId === c.id);
@@ -105,19 +101,15 @@ async function loadDashboard() {
             } else { c.isOverdue = false; }
         });
 
-        // حساب إجمالي الديون المتبقية
         totalDebt = allCustomers.reduce((sum, c) => sum + c.balance, 0);
 
-        // التعديل: حساب إجمالي كل المبالغ "الواصلة" (نوع payment) لجميع الزبائن
         transactions.forEach(t => {
             if (t.type === 'payment') {
                 totalPaidAll += (parseFloat(t.amount) || 0);
             }
         });
 
-        // عرض القيم في الواجهة
         document.getElementById('totalDebt').innerText = formatCurrency(totalDebt, 'IQD');
-        // عرض إجمالي الواصل الجديد
         document.getElementById('totalPaidDisplay').innerText = formatCurrency(totalPaidAll, 'IQD');
         
         document.getElementById('customerCount').innerText = allCustomers.length;
@@ -354,9 +346,7 @@ window.changeAdminPassReal = function() {
     location.reload();
 }
 
-// === التعديل: تغيير التنسيق ليستخدم النقاط (de-DE) بدلاً من الفواصل ===
 window.formatCurrency = (n, c) => {
-    // de-DE يستخدم النقطة للألوف (10.000) وهو المطلوب
     const formatted = Number(n).toLocaleString('de-DE', {minimumFractionDigits: 0, maximumFractionDigits: 2});
     return c === 'USD' ? `$${formatted}` : `${formatted} د.ع`;
 };
@@ -378,9 +368,7 @@ window.openTransModal = function(type) {
     window.showModal('modal-transaction');
 }
 window.saveTransaction = async function() {
-    // التعديل: تنظيف القيمة من النقاط قبل الحفظ في قاعدة البيانات لتخزينها كرقم صحيح
     let rawAmount = document.getElementById('transAmount').value;
-    // حذف النقاط والفواصل لتحويله لرقم خام
     rawAmount = rawAmount.replace(/\./g, '').replace(/,/g, '');
     
     const amount = parseFloat(rawAmount);
@@ -410,7 +398,6 @@ function renderTransactions(transactions, currency) {
         let colorClass = (t.type === 'payment') ? 'trans-pay' : 'trans-debt';
         let typeName = t.type === 'debt' ? 'دين' : (t.type === 'payment' ? 'تسديد' : 'فاتورة');
         
-        // تطبيق التنسيق الجديد (نقاط) هنا أيضاً
         div.innerHTML = `
             <div><strong class="${colorClass}">${typeName}</strong> <small>${t.item || ''}</small><br><small>${t.date}</small></div>
             <strong class="${colorClass}">${window.formatCurrency(t.amount, currency)}</strong>
@@ -419,4 +406,29 @@ function renderTransactions(transactions, currency) {
     });
 }
 window.logout = function() { location.reload(); }
+
+// === التعديل هنا: دالة حذف جميع التسديدات ===
+window.deleteAllPayments = async function() {
+    const code = prompt("أدخل رمز التأكيد لحذف كافة التسديدات:");
+    if (code !== "121") return alert("رمز التأكيد خطأ");
+
+    if (!confirm("هل أنت متأكد تماماً؟ سيتم حذف جميع المبالغ الواصلة (payment) من السجل لجميع الزبائن ولا يمكن التراجع!")) return;
+
+    try {
+        const q = query(collection(db, "transactions"), where("type", "==", "payment"));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) return alert("لا توجد تسديدات لحذفها.");
+
+        const deletePromises = querySnapshot.docs.map(d => deleteDoc(doc(db, "transactions", d.id)));
+        await Promise.all(deletePromises);
+
+        alert("تم حذف جميع التسديدات بنجاح.");
+        loadDashboard();
+    } catch (e) {
+        console.error(e);
+        alert("حدث خطأ أثناء الحذف: " + e.message);
+    }
+}
+
 if(localStorage.getItem('admin_pass')) { /* Locked */ }
